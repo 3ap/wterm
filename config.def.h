@@ -5,13 +5,13 @@
  *
  * font: see http://freedesktop.org/software/fontconfig/fontconfig-user.html
  */
-static char font[] = "Monospace:pixelsize=14:antialias=true:hinting=true:hintstyle=hintfull";
+static char font[] = "SF Mono:pixelsize=27:antialias=true:hinting=true:hintstyle=hintfull";
 static int borderpx = 2;
 
 /*
  * terminal transparency
  */
-static uint8_t term_alpha = 0xaa;
+static uint8_t term_alpha = 0xff;
 
 /*
  * What program is execed by wterm depends of these precedence rules:
@@ -37,7 +37,7 @@ static float chscale = 1.0;
  *
  * More advanced example: " `'\"()[]{}"
  */
-static char worddelimiters[] = " ";
+static char worddelimiters[] = " '\"()[]{}";
 
 /* selection timeouts (in milliseconds) */
 static unsigned int doubleclicktimeout = 300;
@@ -78,26 +78,29 @@ static unsigned int tabspaces = 8;
 /* Terminal colors (16 first used in escape sequence) */
 static const char *colorname[] = {
 	/* 8 normal colors */
-	"black",
-	"red3",
-	"green3",
-	"yellow3",
-	"blue2",
-	"magenta3",
-	"cyan3",
-	"gray90",
+	"#222222",
+	"#9E5641",
+	"#6C7E55",
+	"#CAAF2B",
+	"#7C9AA6",
+	"#956D9D",
+	"#4c8ea1",
+	"#808080",
 
 	/* 8 bright colors */
-	"gray50",
-	"red",
-	"green",
-	"yellow",
-	"#5c5cff",
-	"magenta",
-	"cyan",
-	"white",
+	"#454545",
+	"#CC896D",
+	"#7DB37D",
+	"#BFB556",
+	"#8FADBF",
+	"#C18FCB",
+	"#6bc1d0",
+	"#cdcdcd",
 
 	[255] = 0,
+	"#cbcbc9",
+	"#000002",
+	"#8faf9f"
 	/* more colors can be added after 255 to use with DefaultXX */
 };
 
@@ -106,9 +109,9 @@ static const char *colorname[] = {
  * Default colors (colorname index)
  * foreground, background, cursor
  */
-static unsigned int defaultfg = 7;
-static unsigned int defaultbg = 0;
-static unsigned int defaultcs = 255;
+static unsigned int defaultfg = 256;
+static unsigned int defaultbg = 257;
+static unsigned int defaultcs = 258;
 
 
 /*
