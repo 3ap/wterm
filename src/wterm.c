@@ -33,6 +33,7 @@
 
 #include "arg.h"
 #include "xdg-shell-client-protocol.h"
+#include "gtk-primary-selection-client-protocol.h"
 
 char *argv0;
 
@@ -252,9 +253,9 @@ typedef struct {
   struct wl_seat *seat;
   struct wl_keyboard *keyboard;
   struct wl_pointer *pointer;
-  struct wl_data_device_manager *datadevmanager;
-  struct wl_data_device *datadev;
-  struct wl_data_offer *seloffer;
+  struct gtk_primary_selection_device_manager *datadevmanager;
+  struct gtk_primary_selection_device *datadev;
+  struct gtk_primary_selection_offer *seloffer;
   struct wl_surface *surface;
   struct wl_buffer *buffer;
   struct xdg_wm_base *xdgshell;
@@ -328,7 +329,7 @@ typedef struct {
   } nb, ne, ob, oe;
 
   char *primary;
-  struct wl_data_source *source;
+  struct gtk_primary_selection_source *source;
   int alt;
   uint32_t tclick1, tclick2;
 } Selection;
@@ -505,21 +506,15 @@ static void xdgsurfconfigure(void *, struct xdg_surface *, uint32_t);
 static void xdgtopconfigure(void *, struct xdg_toplevel *, int32_t, int32_t,
                             struct wl_array *);
 static void xdgtopclose(void *, struct xdg_toplevel *);
-static void datadevoffer(void *, struct wl_data_device *,
-                         struct wl_data_offer *);
-static void datadeventer(void *, struct wl_data_device *, uint32_t,
-                         struct wl_surface *, wl_fixed_t, wl_fixed_t,
-                         struct wl_data_offer *);
-static void datadevleave(void *, struct wl_data_device *);
-static void datadevmotion(void *, struct wl_data_device *, uint32_t,
-                          wl_fixed_t x, wl_fixed_t y);
-static void datadevdrop(void *, struct wl_data_device *);
-static void datadevselection(void *, struct wl_data_device *,
-                             struct wl_data_offer *);
-static void dataofferoffer(void *, struct wl_data_offer *, const char *);
-static void datasrctarget(void *, struct wl_data_source *, const char *);
-static void datasrcsend(void *, struct wl_data_source *, const char *, int32_t);
-static void datasrccancelled(void *, struct wl_data_source *);
+
+static void datadevoffer(void *, struct gtk_primary_selection_device *,
+                         struct gtk_primary_selection_offer *);
+static void datadevselection(void *, struct gtk_primary_selection_device *,
+                             struct gtk_primary_selection_offer *);
+static void dataofferoffer(void *, struct gtk_primary_selection_offer *, const char *);
+
+static void datasrcsend(void *, struct gtk_primary_selection_source *, const char *, int32_t);
+static void datasrccancelled(void *, struct gtk_primary_selection_source *);
 
 static void selinit(void);
 static void selnormalize(void);
@@ -553,15 +548,23 @@ static struct wl_keyboard_listener kbdlistener = {
 static struct wl_pointer_listener ptrlistener = {ptrenter, ptrleave, ptrmotion,
                                                  ptrbutton, ptraxis};
 static struct xdg_wm_base_listener base_listener = {xdgshellping};
-static struct wl_data_device_listener datadevlistener = {
-    datadevoffer,  datadeventer, datadevleave,
-    datadevmotion, datadevdrop,  datadevselection};
 static struct xdg_surface_listener xdgsurflistener = {xdgsurfconfigure};
 static struct xdg_toplevel_listener xdgtoplevellistener = {xdgtopconfigure,
                                                            xdgtopclose};
-static struct wl_data_offer_listener dataofferlistener = {dataofferoffer};
-static struct wl_data_source_listener datasrclistener = {
-    datasrctarget, datasrcsend, datasrccancelled};
+
+static struct gtk_primary_selection_device_listener datadevlistener = {
+    .data_offer = datadevoffer,
+    .selection  = datadevselection
+};
+
+static struct gtk_primary_selection_offer_listener dataofferlistener = {
+    .offer = dataofferoffer
+};
+
+static struct gtk_primary_selection_source_listener datasrclistener = {
+    .send = datasrcsend,
+    .cancelled = datasrccancelled
+};
 
 /* Globals */
 static DC dc;
@@ -1041,8 +1044,8 @@ void selpaste(const Arg *dummy) {
       }
     } else {
       pipe(fds);
-      wl_data_offer_receive(wl.seloffer, "text/plain", fds[1]);
-      wl_display_flush(wl.dpy);
+      gtk_primary_selection_offer_receive(wl.seloffer, "text/plain", fds[1]);
+      wl_display_roundtrip(wl.dpy);
       close(fds[1]);
       while ((len = read(fds[0], buf, sizeof buf)) > 0) {
         selwritebuf(buf, len);
@@ -1065,13 +1068,14 @@ void wlsetsel(char *str, uint32_t serial) {
   sel.primary = str;
 
   if (str) {
-    sel.source = wl_data_device_manager_create_data_source(wl.datadevmanager);
-    wl_data_source_add_listener(sel.source, &datasrclistener, NULL);
-    wl_data_source_offer(sel.source, "text/plain; charset=utf-8");
+    sel.source = gtk_primary_selection_device_manager_create_source(wl.datadevmanager);
+    gtk_primary_selection_source_add_listener(sel.source, &datasrclistener, NULL);
+    gtk_primary_selection_source_offer(sel.source, "text/plain");
+    gtk_primary_selection_source_offer(sel.source, "text/plain;charset=utf-8");
   } else {
     sel.source = NULL;
   }
-  wl_data_device_set_selection(wl.datadev, sel.source, serial);
+  gtk_primary_selection_device_set_selection(wl.datadev, sel.source, serial);
 }
 
 void die(const char *errstr, ...) {
@@ -3044,9 +3048,10 @@ void wlinit(void) {
   wl_keyboard_add_listener(wl.keyboard, &kbdlistener, NULL);
   wl.pointer = wl_seat_get_pointer(wl.seat);
   wl_pointer_add_listener(wl.pointer, &ptrlistener, NULL);
+
   wl.datadev =
-      wl_data_device_manager_get_data_device(wl.datadevmanager, wl.seat);
-  wl_data_device_add_listener(wl.datadev, &datadevlistener, NULL);
+      gtk_primary_selection_device_manager_get_device(wl.datadevmanager, wl.seat);
+  gtk_primary_selection_device_add_listener(wl.datadev, &datadevlistener, NULL);
 
   /* font */
   if (!FcInit())
@@ -3541,9 +3546,9 @@ void regglobal(void *data, struct wl_registry *registry, uint32_t name,
     wl.shm = wl_registry_bind(registry, name, &wl_shm_interface, 1);
   } else if (strcmp(interface, "wl_seat") == 0) {
     wl.seat = wl_registry_bind(registry, name, &wl_seat_interface, 4);
-  } else if (strcmp(interface, "wl_data_device_manager") == 0) {
+  } else if (strcmp(interface, "gtk_primary_selection_device_manager") == 0) {
     wl.datadevmanager =
-        wl_registry_bind(registry, name, &wl_data_device_manager_interface, 1);
+        wl_registry_bind(registry, name, &gtk_primary_selection_device_manager_interface, 1);
   } else if (strcmp(interface, "wl_output") == 0) {
     /* bind to outputs so we can get surface enter events */
     wl_registry_bind(registry, name, &wl_output_interface, 2);
@@ -3876,41 +3881,27 @@ void xdgtopclose(void *data, struct xdg_toplevel *top) {
   close_shell_and_exit();
 }
 
-void datadevoffer(void *data, struct wl_data_device *datadev,
-                  struct wl_data_offer *offer) {
-  wl_data_offer_add_listener(offer, &dataofferlistener, NULL);
+void datadevoffer(void *data, struct gtk_primary_selection_device *datadev,
+                  struct gtk_primary_selection_offer *offer) {
+  gtk_primary_selection_offer_add_listener(offer, &dataofferlistener, NULL);
 }
 
-void datadeventer(void *data, struct wl_data_device *datadev, uint32_t serial,
-                  struct wl_surface *surf, wl_fixed_t x, wl_fixed_t y,
-                  struct wl_data_offer *offer) {}
-
-void datadevleave(void *data, struct wl_data_device *datadev) {}
-
-void datadevmotion(void *data, struct wl_data_device *datadev, uint32_t time,
-                   wl_fixed_t x, wl_fixed_t y) {}
-
-void datadevdrop(void *data, struct wl_data_device *datadev) {}
-
-void datadevselection(void *data, struct wl_data_device *datadev,
-                      struct wl_data_offer *offer) {
-  if (offer && (uintptr_t)wl_data_offer_get_user_data(offer) == 1)
+void datadevselection(void *data, struct gtk_primary_selection_device *datadev,
+                      struct gtk_primary_selection_offer *offer) {
+  if (offer && (uintptr_t)gtk_primary_selection_offer_get_user_data(offer) == 1)
     wl.seloffer = offer;
   else
     wl.seloffer = NULL;
 }
 
-void dataofferoffer(void *data, struct wl_data_offer *offer,
+void dataofferoffer(void *data, struct gtk_primary_selection_offer *offer,
                     const char *mimetype) {
   /* mark the offer as usable if it supports plain text */
   if (strncmp(mimetype, "text/plain", 10) == 0)
-    wl_data_offer_set_user_data(offer, (void *)(uintptr_t)1);
+    gtk_primary_selection_offer_set_user_data(offer, (void *)(uintptr_t)1);
 }
 
-void datasrctarget(void *data, struct wl_data_source *source,
-                   const char *mimetype) {}
-
-void datasrcsend(void *data, struct wl_data_source *source,
+void datasrcsend(void *data, struct gtk_primary_selection_source *source,
                  const char *mimetype, int32_t fd) {
   char *buf = sel.primary;
   int len = strlen(sel.primary);
@@ -3922,12 +3913,12 @@ void datasrcsend(void *data, struct wl_data_source *source,
   close(fd);
 }
 
-void datasrccancelled(void *data, struct wl_data_source *source) {
+void datasrccancelled(void *data, struct gtk_primary_selection_source *source) {
   if (sel.source == source) {
     sel.source = NULL;
     selclear();
   }
-  wl_data_source_destroy(source);
+  gtk_primary_selection_source_destroy(source);
 }
 
 void run(void) {
