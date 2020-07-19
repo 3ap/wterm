@@ -150,6 +150,8 @@ static Shortcut shortcuts[] = {
 	{ MODKEY|MOD_MASK_SHIFT,        XKB_KEY_Home,           wlzoomreset,    {.f =  0} },
 	{ MOD_MASK_SHIFT,               XKB_KEY_Insert,         selpaste,       {.i =  0} },
 	{ MODKEY,                       XKB_KEY_Num_Lock,       numlock,        {.i =  0} },
+	{ MOD_MASK_SHIFT,               XKB_KEY_Prior,          kscrollup,      {.i = -1} },
+	{ MOD_MASK_SHIFT,               XKB_KEY_Next,           kscrolldown,    {.i = -1} },
 };
 
 /*
