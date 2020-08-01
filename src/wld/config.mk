@@ -8,7 +8,7 @@ ENABLE_STATIC       = 1
 ENABLE_SHARED       = 0
 
 ENABLE_PIXMAN       = 1
-ENABLE_DRM          = 1
+ENABLE_DRM          = 0
 ENABLE_WAYLAND      = 1
 
 DRM_DRIVERS         = intel nouveau
